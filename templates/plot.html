@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Stock Chart</title>
+    <title>Stock Chart and Earnings Data</title>
 </head>
 <body>
-    <h1>Stock Chart</h1>
+    <h1>Stock Chart and Earnings Data for {{ ticker }}</h1>
+    <h2>Actual EPS: {{ actual_eps }} | Expected EPS: {{ expected_eps }}</h2>
     <img src="data:image/png;base64,{{ plot_url }}">
-    <a href="/">Back</a>
+    <a href="/">Back to Search</a>
 </body>
 </html>
