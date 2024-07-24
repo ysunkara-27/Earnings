@@ -12,23 +12,23 @@ app = Flask(__name__)
 API_KEY = 'PZLREYE2QUALWZHR'
 
 def fetch_earnings_dates(ticker):
-    """Fetch earnings dates and EPS data for a given stock ticker using Alpha Vantage."""
     url = f'https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&symbol={ticker}&apikey={API_KEY}&horizon=12m'
     response = requests.get(url)
     data = response.json()
-    print("API Response:", data)  # Debug: print the API response to help diagnose issues
+    print("API Response:", data)  # Ensure this prints detailed info for diagnosis
+
     earnings = []
     if 'data' in data:
         for item in data['data']:
-            if 'fiscalDateEnding' in item and 'reportedEPS' in item:
-                earnings.append({
-                    'Date': item['fiscalDateEnding'],
-                    'Actual EPS': item['reportedEPS'],
-                    'Expected EPS': item.get('estimatedEPS', 'N/A')  # Use 'N/A' if not available
-                })
+            earnings.append({
+                'Date': item.get('fiscalDateEnding', 'No Date'),
+                'Actual EPS': item.get('reportedEPS', 'No Data'),
+                'Expected EPS': item.get('estimatedEPS', 'No Data')
+            })
     else:
         print("Error: Failed to fetch or parse earnings data.")
     return earnings
+
 
 @app.route('/')
 def index():
