@@ -8,13 +8,15 @@ import requests  # Import requests to make HTTP requests
 
 app = Flask(__name__)
 
-API_KEY = 'PZLREYE2QUALWZHR'  # Your Alpha Vantage API key
+# Replace 'YOUR_ALPHA_VANTAGE_API_KEY' with your actual Alpha Vantage API key.
+API_KEY = 'PZLREYE2QUALWZHR'
 
 def fetch_earnings_dates(ticker):
     """Fetch earnings dates and EPS data for a given stock ticker using Alpha Vantage."""
     url = f'https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&symbol={ticker}&apikey={API_KEY}&horizon=12m'
     response = requests.get(url)
     data = response.json()
+    print("API Response:", data)  # Debug: print the API response to help diagnose issues
     earnings = []
     if 'data' in data:
         for item in data['data']:
@@ -22,8 +24,10 @@ def fetch_earnings_dates(ticker):
                 earnings.append({
                     'Date': item['fiscalDateEnding'],
                     'Actual EPS': item['reportedEPS'],
-                    'Expected EPS': item.get('estimatedEPS', 'N/A')  # 'N/A' if not available
+                    'Expected EPS': item.get('estimatedEPS', 'N/A')  # Use 'N/A' if not available
                 })
+    else:
+        print("Error: Failed to fetch or parse earnings data.")
     return earnings
 
 @app.route('/')
@@ -48,11 +52,16 @@ def plot():
     fig, ax = plt.subplots(figsize=(20, 7))
     ax.plot(data.index, data['Close'], marker='o', label='Close Price')
 
+    # Annotate with EPS and percentage changes
     for date, row in earnings_data.iterrows():
+        if date in data.index:
+            close_price = data.at[date, 'Close']
+        else:
+            close_price = data.iloc[-1]['Close']  # Fallback to the last available close price if the date is out of range
+        percent_change = ((close_price - data.iloc[0]['Close']) / data.iloc[0]['Close']) * 100  # Calculate percent change from the start
         ax.annotate(f'Actual EPS: {row["Actual EPS"]}\nExpected EPS: {row["Expected EPS"]}',
-                    xy=(date, data.at[date, 'Close'] if date in data.index else data.iloc[-1]['Close']),
-                    xytext=(0, 30), textcoords="offset points",
-                    ha='center', va='bottom', color='green' if row["Actual EPS"] >= row["Expected EPS"] else 'red',
+                    xy=(date, close_price), xytext=(0, 30), textcoords="offset points",
+                    ha='center', va='bottom', color='green' if row["Actual EPS"] >= row.get("Expected EPS", row["Actual EPS"]) else 'red',
                     arrowprops=dict(arrowstyle='->', color='black'))
 
     ax.set_title(f'Stock Prices and Earnings Data for {ticker}')
@@ -62,7 +71,7 @@ def plot():
     plt.grid(True)
 
     img = io.BytesIO()
-    plt.savefig(img, format='png')
+    plt.savefig(img, format='png', bbox_inches='tight')
     img.seek(0)
     plot_url = base64.b64encode(img.getvalue()).decode('utf8')
 
