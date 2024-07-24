@@ -8,27 +8,25 @@ import requests  # Import requests to make HTTP requests
 
 app = Flask(__name__)
 
-# Replace 'YOUR_ALPHA_VANTAGE_API_KEY' with your actual Alpha Vantage API key.
-API_KEY = 'PZLREYE2QUALWZHR'
+API_KEY = 'PZLREYE2QUALWZHR'  # Alpha Vantage API key
 
 def fetch_earnings_dates(ticker):
-    url = f'https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&symbol={ticker}&apikey={API_KEY}&horizon=12m'
-    response = requests.get(url)
-    data = response.json()
-    print("API Response:", data)  # Ensure this prints detailed info for diagnosis
+    """Fetch earnings dates and EPS data for a given stock ticker using yfinance."""
+    stock = yf.Ticker(ticker)
+    earnings = stock.earnings
+    eps_data = []
 
-    earnings = []
-    if 'data' in data:
-        for item in data['data']:
-            earnings.append({
-                'Date': item.get('fiscalDateEnding', 'No Date'),
-                'Actual EPS': item.get('reportedEPS', 'No Data'),
-                'Expected EPS': item.get('estimatedEPS', 'No Data')
+    # Get actual EPS from Yahoo Finance
+    if not earnings.empty:
+        for date, row in earnings.iterrows():
+            eps_data.append({
+                'Date': str(date.date()),
+                'Actual EPS': row.get('Earnings', 'N/A')
             })
-    else:
-        print("Error: Failed to fetch or parse earnings data.")
-    return earnings
 
+    # Attempt to fetch expected EPS from Alpha Vantage (additional logic might be needed)
+    # This part can be omitted if not necessary, or you can integrate another service for forward EPS.
+    return eps_data
 
 @app.route('/')
 def index():
@@ -52,16 +50,12 @@ def plot():
     fig, ax = plt.subplots(figsize=(20, 7))
     ax.plot(data.index, data['Close'], marker='o', label='Close Price')
 
-    # Annotate with EPS and percentage changes
+    # Annotate with EPS
     for date, row in earnings_data.iterrows():
-        if date in data.index:
-            close_price = data.at[date, 'Close']
-        else:
-            close_price = data.iloc[-1]['Close']  # Fallback to the last available close price if the date is out of range
-        percent_change = ((close_price - data.iloc[0]['Close']) / data.iloc[0]['Close']) * 100  # Calculate percent change from the start
-        ax.annotate(f'Actual EPS: {row["Actual EPS"]}\nExpected EPS: {row["Expected EPS"]}',
+        close_price = data.at[date, 'Close'] if date in data.index else data.iloc[-1]['Close']
+        ax.annotate(f'Actual EPS: {row["Actual EPS"]}',
                     xy=(date, close_price), xytext=(0, 30), textcoords="offset points",
-                    ha='center', va='bottom', color='green' if row["Actual EPS"] >= row.get("Expected EPS", row["Actual EPS"]) else 'red',
+                    ha='center', va='bottom', color='green',
                     arrowprops=dict(arrowstyle='->', color='black'))
 
     ax.set_title(f'Stock Prices and Earnings Data for {ticker}')
