@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import io
 import base64
+import requests  # Importing requests library
 
 app = Flask(__name__)
 
@@ -16,14 +17,20 @@ def plot():
     ticker = request.form['ticker']
     stock = yf.Ticker(ticker)
 
-    # Fetch stock history and earnings data
+    # Fetch stock history
     data = stock.history(period="max")
-    earnings = stock.earnings
 
-    # If earnings data is available, use the last entry as an example
-    if not earnings.empty:
-        actual_eps = earnings.iloc[-1]['Earnings']
-        expected_eps = "N/A"  # This should be fetched or calculated based on another reliable source if available
+    # Use Alpha Vantage API to fetch earnings data
+    api_key = '0LR9SG8F92L56IF9'  # Your Alpha Vantage API key
+    url = f'https://www.alphavantage.co/query?function=EARNINGS&symbol={ticker}&apikey={api_key}'
+    response = requests.get(url)
+    earnings_data = response.json()
+
+    # Check if earnings data is available and extract the needed information
+    if 'quarterlyEarnings' in earnings_data:
+        latest_earnings = earnings_data['quarterlyEarnings'][0]  # Assuming the first element is the latest
+        actual_eps = latest_earnings.get('reportedEPS', 'Data Unavailable')
+        expected_eps = latest_earnings.get('estimatedEPS', 'Data Unavailable')
     else:
         actual_eps = "Data Unavailable"
         expected_eps = "Data Unavailable"
