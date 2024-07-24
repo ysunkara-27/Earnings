@@ -4,8 +4,27 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import io
 import base64
+import requests  # Import requests to make HTTP requests
 
 app = Flask(__name__)
+
+API_KEY = 'PZLREYE2QUALWZHR'  # Your Alpha Vantage API key
+
+def fetch_earnings_dates(ticker):
+    """Fetch earnings dates and EPS data for a given stock ticker using Alpha Vantage."""
+    url = f'https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&symbol={ticker}&apikey={API_KEY}&horizon=12m'
+    response = requests.get(url)
+    data = response.json()
+    earnings = []
+    if 'data' in data:
+        for item in data['data']:
+            if 'fiscalDateEnding' in item and 'reportedEPS' in item:
+                earnings.append({
+                    'Date': item['fiscalDateEnding'],
+                    'Actual EPS': item['reportedEPS'],
+                    'Expected EPS': item.get('estimatedEPS', 'N/A')  # 'N/A' if not available
+                })
+    return earnings
 
 @app.route('/')
 def index():
@@ -18,47 +37,32 @@ def plot():
     data = stock.history(start='2020-01-01')
     data.index = data.index.tz_localize(None)
 
-    # Define earnings dates, actual EPS, and expected EPS values
-    earnings_info = {
-        'Date': ['2023-02-02', '2023-05-01', '2023-07-25', '2023-10-26', '2024-02-01', '2024-05-01'],
-        'Actual EPS': [10.58, 11.90, 12.34, 13.10, 14.25, 15.40],
-        'Expected EPS': [10.50, 12.00, 12.30, 13.00, 14.20, 15.35]
-    }
+    earnings_info = fetch_earnings_dates(ticker)
+    if not earnings_info:
+        return "Earnings data not found for the specified ticker.", 404
+
     earnings_data = pd.DataFrame(earnings_info)
     earnings_data['Date'] = pd.to_datetime(earnings_data['Date'])
     earnings_data.set_index('Date', inplace=True)
 
-    # Prepare data for plotting
-    segmented_data = pd.DataFrame()
-    pre_window = 7  # days before the earnings to start the analysis
-    post_window = 7  # days after the earnings to end the analysis
-
-    for date in earnings_data.index:
-        window_start = date - pd.Timedelta(days=pre_window)
-        window_end = date + pd.Timedelta(days=post_window)
-        segment = data.loc[window_start:window_end]
-        segment['Segment'] = f'{date.strftime("%Y-%m-%d")}'
-        segmented_data = pd.concat([segmented_data, segment])
-
-    # Plotting
     fig, ax = plt.subplots(figsize=(20, 7))
-    for key, grp in segmented_data.groupby('Segment'):
-        ax.plot(grp.index, grp['Close'], marker='o', label=key)
+    ax.plot(data.index, data['Close'], marker='o', label='Close Price')
 
-    # Annotate with EPS and percentage changes
     for date, row in earnings_data.iterrows():
-        close_start = segmented_data.loc[date - pd.Timedelta(days=pre_window), 'Close']
-        close_end = segmented_data.loc[date + pd.Timedelta(days=post_window), 'Close']
-        percent_change = ((close_end - close_start) / close_start) * 100
         ax.annotate(f'Actual EPS: {row["Actual EPS"]}\nExpected EPS: {row["Expected EPS"]}',
-                    xy=(date, ax.get_ylim()[1]), xytext=(0, 30), textcoords="offset points",
-                    ha='center', va='bottom', color='black', arrowprops=dict(arrowstyle='-[, widthB=2.5, lengthB=1.5', lw=1.5))
-        ax.annotate(f'{percent_change:.2f}%', xy=(date, close_end),
-                    xytext=(0, -20), textcoords="offset points", ha='center', color='blue')
+                    xy=(date, data.at[date, 'Close'] if date in data.index else data.iloc[-1]['Close']),
+                    xytext=(0, 30), textcoords="offset points",
+                    ha='center', va='bottom', color='green' if row["Actual EPS"] >= row["Expected EPS"] else 'red',
+                    arrowprops=dict(arrowstyle='->', color='black'))
 
-    # Convert plot to PNG image to send to HTML
+    ax.set_title(f'Stock Prices and Earnings Data for {ticker}')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Close Price')
+    plt.legend()
+    plt.grid(True)
+
     img = io.BytesIO()
-    plt.savefig(img, format='png', bbox_inches='tight')
+    plt.savefig(img, format='png')
     img.seek(0)
     plot_url = base64.b64encode(img.getvalue()).decode('utf8')
 
